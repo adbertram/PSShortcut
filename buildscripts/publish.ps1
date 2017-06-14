@@ -5,22 +5,20 @@ try {
 	$tempmoduleFolderPath = "$env:Temp\PSShortcut"
 	$null = mkdir $tempmoduleFolderPath
 
-	## Move all of the files/folders to exclude out of the main folder
+	## Remove all of the files/folders to exclude out of the main folder
 	$excludeFromPublish = @(
 		'PSShortcut\\buildscripts'
 		'PSShortcut\\appveyor\.yml'
 		'PSShortcut\\\.git'
 		'PSShortcut\\README\.md'
+		'PSShortcut\\TestResults\.xml'
 	)
 	$exclude = $excludeFromPublish -join '|'
-	Get-ChildItem -Path $env:APPVEYOR_BUILD_FOLDER -Recurse | where { $_.FullName -match $exclude } | Move-Item -Destination $env:temp
-
-	## Copy only the package contents to the module folder
-	Get-ChildItem -Path $env:APPVEYOR_BUILD_FOLDER -Recurse | Copy-Item -Destination $tempmoduleFolderPath
+	Get-ChildItem -Path $env:APPVEYOR_BUILD_FOLDER -Recurse | where { $_.FullName -match $exclude } | Remove-Item -Force -Recurse
 
 	## Publish module to PowerShell Gallery
 	$publishParams = @{
-		Path = $tempmoduleFolderPath
+		Path = $env:APPVEYOR_BUILD_FOLDER
 		NuGetApiKey = $env:nuget_apikey
 		Repository = 'PSGallery'
 		Force = $true
