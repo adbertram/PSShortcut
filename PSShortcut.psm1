@@ -1,5 +1,5 @@
 ﻿function Get-Shortcut {
-	<#
+    <#
 	.SYNOPSIS
 		This function searches for files matching a LNK and URL extension.
 	.DESCRIPTION
@@ -34,106 +34,110 @@
 	.PARAMETER NoRecurse
 		This turns off recursion on the folder path specified searching subfolders of the FolderPath
 	#>
-	[CmdletBinding()]
-	param (
-		[string]$TargetPath,
-		[string]$Name,
-		[string]$FilePath,
-		[string[]]$FolderPath,
-		[switch]$NoRecurse
-	)
-	begin {
-		function Get-RootUserProfileFolderPath {
-			<#
+    [CmdletBinding()]
+    param (
+        [string]$TargetPath,
+        [string]$Name,
+        [string]$FilePath,
+        [string[]]$FolderPath,
+        [switch]$NoRecurse
+    )
+    begin {
+        function Get-RootUserProfileFolderPath {
+            <#
 			.SYNOPSIS
 				Because sometimes the root user profile folder path can be different this function is a placeholder to find
 				the root user profile folder path ie. C:\Users or C:\Documents and Settings for any OS.  It queries a registry value
 				to find this path.
 			#>
-			[CmdletBinding()]
-			param ()
-			process {
-				try {
-					(Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -Name ProfilesDirectory).ProfilesDirectory
-				} catch {
-					Write-Error -Message $_.Exception.Message
-				}
-			}
-		}
-		function Get-AllUsersProfileFolderPath {
-			<#
+            [CmdletBinding()]
+            param ()
+            process {
+                try {
+                    (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -Name ProfilesDirectory).ProfilesDirectory
+                } catch {
+                    Write-Error -Message $_.Exception.Message
+                }
+            }
+        }
+        function Get-AllUsersProfileFolderPath {
+            <#
 			.SYNOPSIS
 				Because sometimes the all users profile folder path can be different this function is a placeholder to find
 				the all users profile folder path ie. C:\ProgramData or C:\Users\All Users. It uses an environment variable
 				to find this path.
 			#>
-			[CmdletBinding()]
-			param ()
-			process {
-				try {
-					$env:ALLUSERSPROFILE
-				} catch {
-					Write-Error -Message $_.Exception.Message
-				}
-			}
-		}
-	}
-	process {
-		try {
-			if (!$FolderPath) {
-				$FolderPath = (Get-RootUserProfileFolderPath), (Get-AllUsersProfileFolderPath)
-			}
+            [CmdletBinding()]
+            param ()
+            process {
+                try {
+                    $env:ALLUSERSPROFILE
+                } catch {
+                    Write-Error -Message $_.Exception.Message
+                }
+            }
+        }
+    }
+    process {
+        try {
+            if (!$FolderPath) {
+                $FolderPath = (Get-RootUserProfileFolderPath), (Get-AllUsersProfileFolderPath)
+            }
 			
-			$Params = @{
-				'Include' = @('*.url', '*.lnk');
-				'ErrorAction' = 'SilentlyContinue';
-				'ErrorVariable' = 'MyError';
-				'Force' = $true
-			}
+            $Params = @{
+                'Include'       = @('*.url', '*.lnk');
+                'ErrorAction'   = 'SilentlyContinue';
+                'ErrorVariable' = 'MyError';
+                'Force'         = $true
+            }
 			
-			if (!$NoRecurse) {
-				$Params['Recurse'] = $true
-			}
+            if (!$NoRecurse) {
+                $Params['Recurse'] = $true
+            }
 			
-			[System.Collections.ArrayList]$Shortcuts = @()
-			
-			foreach ($Path in $FolderPath) {
-				try {
-					Write-Verbose -Message "Searching for shortcuts in $Path..."
-					[System.Collections.ArrayList]$WhereConditions = @()
-					$Params['Path'] = $Path
-					if ($TargetPath) {
-						$WhereConditions.Add('(($ShellObject.CreateShortcut($_.FullName)).TargetPath -like "*$TargetPath*")') | Out-Null
-					}
-					if ($Name) {
-						$WhereConditions.Add('($_.Name -like "*$Name*")') | Out-Null
-					}
-					if ($FilePath) {
-						$WhereConditions.Add('($_.FullName -like "*$FilePath*")') | Out-Null
-					}
-					if ($WhereConditions.Count -gt 0) {
-						$WhereBlock = [scriptblock]::Create($WhereConditions -join ' -and ')
-						Get-ChildItem @Params | where $WhereBlock
-					} else {
-						Get-ChildItem @Params
-					}
-					if ($NewShortcuts) {
-						$Shortcuts.Add($NewShortcuts) | Out-Null
-					}
-				} catch {
-					Write-Error -Message "Error: $($_.Exception.Message) - Line Number: $($_.InvocationInfo.ScriptLineNumber)"
-					$false
-				}
-			}
-		} catch {
-			Write-Error -Message "Error: $($_.Exception.Message) - Line Number: $($_.InvocationInfo.ScriptLineNumber)"
-			$false
-		}
-	}
+            [System.Collections.ArrayList]$Shortcuts = @()
+            
+            $shell = New-Object -ComObject WScript.Shell
+            foreach ($Path in $FolderPath) {
+                try {
+                    Write-Verbose -Message "Searching for shortcuts in $Path..."
+                    [System.Collections.ArrayList]$WhereConditions = @()
+                    $Params['Path'] = $Path
+                    if ($TargetPath) {
+                        if ($TargetPath.StartsWith('http')) {
+                            $TargetPath = $TargetPath -replace '//', '/'
+                        }
+                        $WhereConditions.Add('(($shell.CreateShortcut($_.FullName)).TargetPath -like "*$TargetPath*")') | Out-Null
+                    }
+                    if ($Name) {
+                        $WhereConditions.Add('($_.Name -like "*$Name*")') | Out-Null
+                    }
+                    if ($FilePath) {
+                        $WhereConditions.Add('($_.FullName -like "*$FilePath*")') | Out-Null
+                    }
+                    if ($WhereConditions.Count -gt 0) {
+                        $WhereBlock = [scriptblock]::Create($WhereConditions -join ' -and ')
+                        Get-ChildItem @Params | where $WhereBlock
+                    } else {
+                        Get-ChildItem @Params
+                    }
+                    if ($NewShortcuts) {
+                        $Shortcuts.Add($NewShortcuts) | Out-Null
+                    }
+                } catch {
+                    Write-Error -Message "Error: $($_.Exception.Message) - Line Number: $($_.InvocationInfo.ScriptLineNumber)"
+                    $false
+                }
+            }
+        } catch {
+            Write-Error -Message "Error: $($_.Exception.Message) - Line Number: $($_.InvocationInfo.ScriptLineNumber)"
+            $false
+        }
+    }
 }
 
 function Set-Shortcut {
-	<#
+    <#
 	.SYNOPSIS
 		This function modifies a LNK or URL extension shortcut.
 	.EXAMPLE
@@ -149,36 +153,36 @@ function Set-Shortcut {
 	.PARAMETER Comment
 		The description of the shortcut you'd like to change to
 	#>
-	[CmdletBinding(DefaultParameterSetName = 'Default')]
-	param (
-		[Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
-		[ValidateScript({ Test-Path -Path $_ -PathType Leaf })]
-		[Alias('Fullname')]
-		[string[]]$FilePath,
-		[Parameter(Mandatory,ParameterSetName = 'TargetPath')]
-		[string]$TargetPath,
-		[Parameter(Mandatory, ParameterSetName = 'Comment')]
-		[string]$Comment
-	)
-	process {
-		try {
-			$ShellObject = New-Object -ComObject Wscript.Shell
-			foreach ($File in $FilePath) {
-				try {
-					$Shortcut = $ShellObject.CreateShortcut($File)
-					if ($TargetPath) {
-						$Shortcut.TargetPath = $TargetPath
-					}
-					if ($Comment) {
-						$Shortcut.Description = $Comment
-					}
-					$Shortcut.Save()
-				} catch {
-					Write-Error -Message "Error: $($_.Exception.Message) - Line Number: $($_.InvocationInfo.ScriptLineNumber)"
-				}
-			}
-		} catch {
-			Write-Error -Message "Error: $($_.Exception.Message) - Line Number: $($_.InvocationInfo.ScriptLineNumber)"
-		}
-	}
+    [CmdletBinding(DefaultParameterSetName = 'Default')]
+    param (
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [ValidateScript({ Test-Path -Path $_ -PathType Leaf })]
+        [Alias('Fullname')]
+        [string[]]$FilePath,
+        [Parameter(Mandatory, ParameterSetName = 'TargetPath')]
+        [string]$TargetPath,
+        [Parameter(Mandatory, ParameterSetName = 'Comment')]
+        [string]$Comment
+    )
+    process {
+        try {
+            $ShellObject = New-Object -ComObject Wscript.Shell
+            foreach ($File in $FilePath) {
+                try {
+                    $Shortcut = $ShellObject.CreateShortcut($File)
+                    if ($TargetPath) {
+                        $Shortcut.TargetPath = $TargetPath
+                    }
+                    if ($Comment) {
+                        $Shortcut.Description = $Comment
+                    }
+                    $Shortcut.Save()
+                } catch {
+                    Write-Error -Message "Error: $($_.Exception.Message) - Line Number: $($_.InvocationInfo.ScriptLineNumber)"
+                }
+            }
+        } catch {
+            Write-Error -Message "Error: $($_.Exception.Message) - Line Number: $($_.InvocationInfo.ScriptLineNumber)"
+        }
+    }
 }
